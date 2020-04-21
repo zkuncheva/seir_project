@@ -1,9 +1,15 @@
+import os
 import sys
 import warnings
+import math
 import numpy as np
 import scipy.interpolate as sci
 import itertools
 flatten = itertools.chain.from_iterable
+from datetime import date
+
+import matplotlib.pyplot as plt
+import seaborn as sns; sns.set()
 
 
 def steeper(V,I,K):
@@ -177,3 +183,131 @@ def seir_spline_predict(StartDate, EndDate0, EndDate1, Tbreak, ctrBeta, ctrGamma
             R.append(SEIRTotal[3])
     return S,E,I,R,gamma
     
+# Plotting tools
+def seir_plot(S,E,I,R,TS,title_add='',fig_save=0,**kwargs):
+    """Function to plot all four SEIR values over the entire data recorded"""
+    """
+    :param list TS: Time Series (in date.toordinal format) for the entire date range
+    :param list S: S(usceptibility) population
+    :param list E: E(exposed) population
+    :param list I: I(nfected) population
+    :param list R: R(ecovered) population
+    :param str title_add: text to add to the title in the format ' extra text'
+    :param int fig_save: binary variable indicating whether to save a figure (1) or not (0)
+    :param str fig_text: further name to add to save fig in the format '_text_' 
+    """
+    fig, ax1 = plt.subplots(1,1,figsize=(10,6))
+
+    # share the x-axis for both the axes
+    ax2=ax1.twinx()
+
+    # create a plot for all four components
+    function1 = ax1.plot(TS,S,'b',label='Susceptible population')
+    function2 = ax2.plot(TS,E,'y',label='Exposed population')
+    function3 = ax2.plot(TS,I,'r',label='Infectious population')
+    function4 = ax2.plot(TS,R,'g',label='Recovered population')
+
+    #save the figure
+    functions = function1+function2+function3+function4
+    labels= [f.get_label() for f in functions]
+    plt.legend(functions, labels, loc=0, fontsize=15)
+
+
+    # add x-label (only one, since it is shared) and the y-labels
+    ax1.set_xlabel('$date$',fontsize=15)
+    ax1.set_ylabel('$S(t)$',fontsize=15)
+    ax2.set_ylabel('$E(t), I(t), R(t)$',fontsize=15)
+    plt.sca(ax1)
+    plt.xticks(ticks=TS[0::5], labels=[date.fromordinal(x) for x in TS[0::5]], rotation=45,fontsize=15)
+
+    plt.title('SEIR'+title_add,fontsize=25)
+
+    if fig_save==1:
+        fig_text = kwargs.get('fig_text','')
+        plt.savefig('SEIR'+fig_text+'.png')
+
+def gamma_plot(I_data,I_predicted,TimeSeries, DaysHistoryFromStart, StartDate, EndDate0, EndDate1, Nodes, Tbreak, SetDates1, coefB, coefBrx, coefG, coefGrx, NameState, FileOut_name, FileOut_savedir, fig_save):
+    plt.figure(figsize=[20,12])
+    ax = plt.gca()
+    # plot the true I curve (both known and predicted section) including true raw I data
+    plt.plot(TimeSeries[0:DaysHistoryFromStart], I_predicted[0:DaysHistoryFromStart], 'r', linewidth=7)
+    plt.plot(TimeSeries[DaysHistoryFromStart-1:], I_predicted[DaysHistoryFromStart-1:], 'r', linewidth=3)
+    plt.plot(TimeSeries[0:DaysHistoryFromStart], I_data[0:DaysHistoryFromStart], 'b*', markersize=12)
+
+    # expand top y-limit to allow for important date labels
+    bottom,top = plt.ylim()
+    plt.ylim(bottom,top+6.2) 
+
+    # add patch: green for present data and magenda for predicted 
+    plt.axvspan(EndDate0, EndDate1, facecolor="magenta", alpha=0.1, zorder=-100)
+    plt.axvspan(StartDate, EndDate0, facecolor="green", alpha=0.1, zorder=-100)
+
+    # Important dates: date, label, color, linestyle, position of label on line
+    label_list = [
+        (StartDate, 'Start Date:\n %s'%(date.fromordinal(StartDate)), 'b','solid', 4),
+        (Nodes[1], 'First restr. measure:\n %s'%(date.fromordinal(Nodes[1])), 'b','solid', 5),
+        (Nodes[2], 'Second restr. measure:\n %s'%(date.fromordinal(Nodes[2])), 'b','solid', 6),
+        (EndDate0, 'TODAY:\n %s'%(date.fromordinal(EndDate0)),'g','solid', 4),
+        (Tbreak, 'Third restr. measure:\n %s'%(date.fromordinal(Tbreak)), 'magenta','dashed', 5),
+        (EndDate1, '', 'b','solid', 1)    
+    ]
+    # Plot important dates as vertical lines with labels on them
+    bottom,top = plt.ylim()
+    for date_point, label, clr, lstyle, label_pos in label_list:
+        plt.axvline(x=date_point, color=clr, linestyle=lstyle)
+        plt.text(date_point, ax.get_ylim()[1]-label_pos, label, 
+                horizontalalignment='center',
+                verticalalignment='center',
+                color=clr,
+                bbox=dict(facecolor='white', alpha=0.9, edgecolor=clr),
+                fontsize=15)
+    #Another option would be to use vlines which get the labels of each vertical line automatically added to the legend 
+
+    ### ADD DETAILS ###
+    plt.ylabel('Daily number of infected people (spreading virus)', fontsize=20)
+    plt.yticks(fontsize=15)
+    # Get x-valued time labels to plot
+    time_labels = TimeSeries[0::3]
+    time_labels = [x for x in time_labels if [abs(x-Nodes[1])>3 for x in time_labels]]
+    time_labels = [x for x in time_labels if [abs(x-Nodes[2])>3 for x in time_labels]]
+    time_labels = [x for x in time_labels if [abs(x-EndDate0)>3 for x in time_labels]]
+    time_labels = [x for x in time_labels if [abs(x-Tbreak)>3 for x in time_labels]]
+    time_labels = list(flatten([time_labels,[Nodes[1]],[Nodes[2]],[EndDate0],[Tbreak]]))
+    time_labels.sort()
+    plt.xticks(ticks=time_labels, labels=[date.fromordinal(x) for x in time_labels], rotation=45, fontsize=15)
+    # add patch: white for user specified coefficients
+    # plt.axhspan(top-4, top, facecolor="white", zorder=100)
+
+    # insert textbox with user specified parameters
+    coefBbefore = 'Transmission rate (before third restr. measure) = %s'%(str(coefB))
+    coefBafter = 'Removal rate (before third restr. measure) = %s'%(str(coefG))
+    coefGbefore = 'Transmission rate (after third restr. measure) = %s'%(str(coefBrx+0.8))
+    coefGafter = 'Removal rate (after third restr. measure) = %s'%(str(coefGrx+0.8))
+    plt.text(StartDate+0.2*(EndDate0-StartDate), ax.get_ylim()[1]-1.5, 
+            'User specified coefficients:\n   %s\n   %s\n   %s\n   %s'%(coefBbefore,coefBafter,coefGbefore,coefGafter), 
+            horizontalalignment='left',
+            verticalalignment='center',
+            color=clr,
+            bbox=dict(facecolor='white', edgecolor='b'),
+            fontsize=17)
+
+    # insert section titles
+    plt.text(StartDate+0.1*(EndDate0-StartDate), top+0.1, 
+             'Fit model to data for %s'%(NameState)
+             , fontsize=20
+             , weight='bold'
+            )
+    plt.text(EndDate0, top+0.1, 'Prediction of TVBG-SEIR Model', fontsize=20, weight='bold')
+
+    # saving figure
+    time_date = float([i for i in range(len(SetDates1)) if [Tbreak-y for y in SetDates1][i]==0][0])
+    coefB_ix = round(coefB/0.2,0)
+    coefG_ix = round(coefG/0.2,0)
+    coefBrx_ix = float(math.ceil(coefBrx/0.4))
+    coefGrx_ix = float(math.ceil(coefGrx/0.4))
+    ExperimentNumber = 49*3*3*time_date+7*3*3*(coefB_ix-1)+3*3*(coefG_ix-1)+3*(coefBrx_ix-1)+coefGrx_ix
+
+    if fig_save == 1:
+        plt.savefig(FileOut_savedir+str(FileOut_name)+str(int(ExperimentNumber))+'.jpg')
+    else:
+        divergent_ix = ExperimentNumber # TODO: return this as output if it exists and save it???
