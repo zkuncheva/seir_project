@@ -1,16 +1,26 @@
+#import system packages
 import os
 import sys
 import warnings
+#import scientific packages
 import math
 import numpy as np
 import scipy.interpolate as sci
 import itertools
 flatten = itertools.chain.from_iterable
-from datetime import date
-
+#import datetime
+from datetime import date,datetime
+#import plotting tools
 import matplotlib.pyplot as plt
 import seaborn as sns; sns.set()
 
+# date functions
+def sdate2ordinal(x):
+    ''' Function to take date in the format 14-Mar-2020 and turn it into date(2020,3,14)'''
+    return date.toordinal(datetime.strptime(x, '%d-%b-%Y').date())
+
+
+# Spline functions
 
 def steeper(V,I,K):
     '''Function to make exp steeper a decreasing function V in the interval [a,b]'''
@@ -226,7 +236,17 @@ def seir_plot(S,E,I,R,TS,title_add='',fig_save=0,**kwargs):
         fig_text = kwargs.get('fig_text','')
         plt.savefig('SEIR'+fig_text+'.png')
 
-def gamma_plot(I_data,I_predicted,TimeSeries, DaysHistoryFromStart, StartDate, EndDate0, EndDate1, Nodes, Tbreak, SetDates1, coefB, coefBrx, coefG, coefGrx, NameState, FileOut_name, FileOut_savedir, fig_save):
+def gamma_plot(I_data,I_predicted,TimeSeries, DaysHistoryFromStart, StartDate, EndDate0, EndDate1, Nodes
+               , Tbreak
+               , SetDates1
+               , coefB
+               , coefBrx
+               , coefG
+               , coefGrx
+               , NameState
+               , FileOut_name
+               , FileOut_savedir
+               , fig_save):
     plt.figure(figsize=[20,12])
     ax = plt.gca()
     # plot the true I curve (both known and predicted section) including true raw I data
@@ -236,7 +256,7 @@ def gamma_plot(I_data,I_predicted,TimeSeries, DaysHistoryFromStart, StartDate, E
 
     # expand top y-limit to allow for important date labels
     bottom,top = plt.ylim()
-    plt.ylim(bottom,top+6.2) 
+    plt.ylim(bottom,top+0.5*(top-bottom)) 
 
     # add patch: green for present data and magenda for predicted 
     plt.axvspan(EndDate0, EndDate1, facecolor="magenta", alpha=0.1, zorder=-100)
@@ -255,7 +275,7 @@ def gamma_plot(I_data,I_predicted,TimeSeries, DaysHistoryFromStart, StartDate, E
     bottom,top = plt.ylim()
     for date_point, label, clr, lstyle, label_pos in label_list:
         plt.axvline(x=date_point, color=clr, linestyle=lstyle)
-        plt.text(date_point, ax.get_ylim()[1]-label_pos, label, 
+        plt.text(date_point, ax.get_ylim()[1]-((label_pos)/6)*(1/3)*(top-bottom), label, 
                 horizontalalignment='center',
                 verticalalignment='center',
                 color=clr,
@@ -279,11 +299,11 @@ def gamma_plot(I_data,I_predicted,TimeSeries, DaysHistoryFromStart, StartDate, E
     # plt.axhspan(top-4, top, facecolor="white", zorder=100)
 
     # insert textbox with user specified parameters
-    coefBbefore = 'Transmission rate (before third restr. measure) = %s'%(str(coefB))
-    coefBafter = 'Removal rate (before third restr. measure) = %s'%(str(coefG))
-    coefGbefore = 'Transmission rate (after third restr. measure) = %s'%(str(coefBrx+0.8))
-    coefGafter = 'Removal rate (after third restr. measure) = %s'%(str(coefGrx+0.8))
-    plt.text(StartDate+0.2*(EndDate0-StartDate), ax.get_ylim()[1]-1.5, 
+    coefBbefore = 'Coef for Transmission rate (before third restr. measure) = %s'%(str(coefB))
+    coefBafter = 'Coef for Removal rate (before third restr. measure) = %s'%(str(coefG))
+    coefGbefore = 'Coef for Transmission rate (after third restr. measure) = %s'%(str(coefBrx+0.8))
+    coefGafter = 'Coef for Removal rate (after third restr. measure) = %s'%(str(coefGrx+0.8))
+    plt.text(StartDate+0.2*(EndDate0-StartDate), ax.get_ylim()[1]-(1.5/6)*(1/3)*(top-bottom), 
             'User specified coefficients:\n   %s\n   %s\n   %s\n   %s'%(coefBbefore,coefBafter,coefGbefore,coefGafter), 
             horizontalalignment='left',
             verticalalignment='center',
@@ -308,6 +328,13 @@ def gamma_plot(I_data,I_predicted,TimeSeries, DaysHistoryFromStart, StartDate, E
     ExperimentNumber = 49*3*3*time_date+7*3*3*(coefB_ix-1)+3*3*(coefG_ix-1)+3*(coefBrx_ix-1)+coefGrx_ix
 
     if fig_save == 1:
-        plt.savefig(FileOut_savedir+str(FileOut_name)+str(int(ExperimentNumber))+'.jpg')
+        plt.savefig(FileOut_savedir+"/"+str(FileOut_name)+str(int(ExperimentNumber))+'.jpg')
     else:
-        divergent_ix = ExperimentNumber # TODO: return this as output if it exists and save it???
+        divergent_ix = ExperimentNumber #
+    plt.close()
+    try:
+        divergent_ix
+    except NameError:
+        pass        
+    else: 
+        return divergent_ix
